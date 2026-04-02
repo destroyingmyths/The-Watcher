@@ -1,0 +1,416 @@
+name: Build BioSpace Monitor APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Create project structure
+        run: |
+          mkdir -p BioSpace/app/src/main/java/com/biospace/monitor
+          mkdir -p BioSpace/app/src/main/res/layout
+          mkdir -p BioSpace/app/src/main/res/values
+          mkdir -p BioSpace/app/src/main/res/drawable
+          mkdir -p BioSpace/app/src/main/assets
+          mkdir -p BioSpace/gradle/wrapper
+
+      - name: Write settings.gradle
+        run: |
+          cat > BioSpace/settings.gradle << 'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "BioSpace"
+          include ':app'
+          EOF
+
+      - name: Write root build.gradle
+        run: |
+          cat > BioSpace/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application' version '8.1.0' apply false
+          }
+          EOF
+
+      - name: Write gradle.properties
+        run: |
+          cat > BioSpace/gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+
+      - name: Write gradle-wrapper.properties
+        run: |
+          cat > BioSpace/gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
+      - name: Download gradlew
+        run: |
+          cd BioSpace
+          curl -L https://raw.githubusercontent.com/gradle/gradle/v8.0.0/gradlew -o gradlew
+          chmod +x gradlew
+
+      - name: Write app build.gradle
+        run: |
+          cat > BioSpace/app/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'com.biospace.monitor'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.biospace.monitor"
+                  minSdk 26
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  debug {
+                      debuggable true
+                  }
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'androidx.core:core:1.12.0'
+          }
+          EOF
+
+      - name: Write AndroidManifest.xml
+        run: |
+          cat > BioSpace/app/src/main/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.biospace.monitor">
+
+              <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+              <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+              <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>
+              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+              <uses-permission android:name="android.permission.WAKE_LOCK"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+              <uses-permission android:name="android.permission.VIBRATE"/>
+              <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+              <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+
+              <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@drawable/ic_launcher"
+                  android:label="@string/app_name"
+                  android:theme="@style/Theme.BioSpace"
+                  android:usesCleartextTraffic="true">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:screenOrientation="portrait">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+
+                  <service
+                      android:name=".BleService"
+                      android:enabled="true"
+                      android:exported="false"
+                      android:foregroundServiceType="connectedDevice"/>
+
+                  <service
+                      android:name=".SpaceWeatherService"
+                      android:enabled="true"
+                      android:exported="false"
+                      android:foregroundServiceType="dataSync"/>
+
+                  <receiver
+                      android:name=".BootReceiver"
+                      android:enabled="true"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                      </intent-filter>
+                  </receiver>
+
+                  <receiver
+                      android:name=".NotificationActionReceiver"
+                      android:enabled="true"
+                      android:exported="false">
+                      <intent-filter>
+                          <action android:name="com.biospace.ACTION_LOG_NOW"/>
+                          <action android:name="com.biospace.ACTION_DISMISS"/>
+                      </intent-filter>
+                  </receiver>
+
+              </application>
+          </manifest>
+          EOF
+
+      - name: Write MainActivity.java
+        run: |
+          cat > BioSpace/app/src/main/java/com/biospace/monitor/MainActivity.java << 'EOF'
+          package com.biospace.monitor;
+          import android.Manifest;
+          import android.annotation.SuppressLint;
+          import android.app.Activity;
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.IntentFilter;
+          import android.content.pm.PackageManager;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.webkit.JavascriptInterface;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import androidx.core.app.ActivityCompat;
+          public class MainActivity extends Activity {
+              private WebView webView;
+              private BroadcastReceiver dataReceiver;
+              private static final int PERM_REQ = 101;
+
+              @SuppressLint("SetJavaScriptEnabled")
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  requestAllPermissions();
+                  webView = findViewById(R.id.webView);
+                  WebSettings s = webView.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  s.setAllowFileAccessFromFileURLs(true);
+                  s.setAllowUniversalAccessFromFileURLs(true);
+                  s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.addJavascriptInterface(new Bridge(), "AndroidBridge");
+                  webView.loadUrl("file:///android_asset/biospace.html");
+                  dataReceiver = new BroadcastReceiver() {
+                      @Override public void onReceive(Context ctx, Intent intent) {
+                          String json = intent.getStringExtra("json");
+                          if (json != null) pushToWeb(json);
+                      }
+                  };
+                  IntentFilter filter = new IntentFilter();
+                  filter.addAction("com.biospace.WATCH_DATA");
+                  filter.addAction("com.biospace.SPACE_WEATHER");
+                  filter.addAction("com.biospace.ALERT");
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      registerReceiver(dataReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+                  } else {
+                      registerReceiver(dataReceiver, filter);
+                  }
+                  startService(new Intent(this, BleService.class));
+                  startService(new Intent(this, SpaceWeatherService.class));
+              }
+
+              private void requestAllPermissions() {
+                  String[] perms = {
+                      Manifest.permission.ACCESS_FINE_LOCATION,
+                      Manifest.permission.ACCESS_COARSE_LOCATION,
+                      Manifest.permission.BLUETOOTH_SCAN,
+                      Manifest.permission.BLUETOOTH_CONNECT,
+                      Manifest.permission.POST_NOTIFICATIONS
+                  };
+                  ActivityCompat.requestPermissions(this, perms, PERM_REQ);
+              }
+
+              public void pushToWeb(String json) {
+                  runOnUiThread(() ->
+                      webView.evaluateJavascript("window.onNativeData&&window.onNativeData(" + json + ")", null)
+                  );
+              }
+
+              class Bridge {
+                  @JavascriptInterface public void connectWatch(String mac) {
+                      Intent i = new Intent(MainActivity.this, BleService.class);
+                      i.putExtra("mac", mac); i.setAction("CONNECT"); startService(i);
+                  }
+                  @JavascriptInterface public void disconnectWatch() {
+                      Intent i = new Intent(MainActivity.this, BleService.class);
+                      i.setAction("DISCONNECT"); startService(i);
+                  }
+                  @JavascriptInterface public void requestBP() {
+                      Intent i = new Intent(MainActivity.this, BleService.class);
+                      i.setAction("REQUEST_BP"); startService(i);
+                  }
+                  @JavascriptInterface public void requestHRV() {
+                      Intent i = new Intent(MainActivity.this, BleService.class);
+                      i.setAction("REQUEST_HRV"); startService(i);
+                  }
+                  @JavascriptInterface public void requestStress() {
+                      Intent i = new Intent(MainActivity.this, BleService.class);
+                      i.setAction("REQUEST_STRESS"); startService(i);
+                  }
+                  @JavascriptInterface public void requestSpo2() {
+                      Intent i = new Intent(MainActivity.this, BleService.class);
+                      i.setAction("REQUEST_SPO2"); startService(i);
+                  }
+                  @JavascriptInterface public void requestSleep() {
+                      Intent i = new Intent(MainActivity.this, BleService.class);
+                      i.setAction("REQUEST_SLEEP"); startService(i);
+                  }
+                  @JavascriptInterface public void startScan() {
+                      Intent i = new Intent(MainActivity.this, BleService.class);
+                      i.setAction("SCAN"); startService(i);
+                  }
+                  @JavascriptInterface public void sendWatchNotif(String msg) {
+                      Intent i = new Intent(MainActivity.this, BleService.class);
+                      i.setAction("NOTIF_WATCH"); i.putExtra("msg", msg); startService(i);
+                  }
+                  @JavascriptInterface public void sendPhoneNotif(String title, String body) {
+                      NotificationHelper.sendAlert(MainActivity.this, title, body, "manual");
+                  }
+                  @JavascriptInterface public String getVersion() { return "1.0"; }
+              }
+
+              @Override
+              protected void onDestroy() {
+                  super.onDestroy();
+                  if (dataReceiver != null) unregisterReceiver(dataReceiver);
+              }
+
+              @Override
+              public void onBackPressed() {
+                  if (webView != null && webView.canGoBack()) webView.goBack();
+                  else super.onBackPressed();
+              }
+          }
+          EOF
+
+      - name: Write BleService.java
+        run: |
+          cat > BioSpace/app/src/main/java/com/biospace/monitor/BleService.java << 'EOF'
+          package com.biospace.monitor;
+          import android.annotation.SuppressLint;
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.Service;
+          import android.bluetooth.*;
+          import android.bluetooth.le.*;
+          import android.content.Intent;
+          import android.os.*;
+          @SuppressLint("MissingPermission")
+          public class BleService extends Service {
+              private static final String TAG = "BleService";
+              private static final String CHANNEL_ID = "biospace_ble";
+              import java.util.UUID;
+              // Standard GATT
+              private static final UUID SVC_HR      = UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb");
+              private static final UUID CHR_HR_MEAS = UUID.fromString("00002a37-0000-1000-8000-00805f9b34fb");
+              private static final UUID SVC_SPO2    = UUID.fromString("00001822-0000-1000-8000-00805f9b34fb");
+              private static final UUID CHR_SPO2    = UUID.fromString("00002a5f-0000-1000-8000-00805f9b34fb");
+              private static final UUID SVC_BP      = UUID.fromString("00001810-0000-1000-8000-00805f9b34fb");
+              private static final UUID CHR_BP_MEAS = UUID.fromString("00002a35-0000-1000-8000-00805f9b34fb");
+              private static final UUID SVC_BATT    = UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb");
+              private static final UUID CHR_BATT    = UUID.fromString("00002a19-0000-1000-8000-00805f9b34fb");
+              private static final UUID SVC_DEVINFO = UUID.fromString("0000180a-0000-1000-8000-00805f9b34fb");
+              private static final UUID CHR_FW      = UUID.fromString("00002a26-0000-1000-8000-00805f9b34fb");
+              // Nordic UART vendor channel (BP Doctor Y007)
+              private static final UUID SVC_VENDOR   = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e");
+              private static final UUID CHR_V_NOTIFY = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e");
+              private static final UUID CHR_V_WRITE  = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e");
+              private static final UUID DESC_CCC     = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
+              // Proprietary command bytes for Y007
+              private static final byte[] CMD_BP_START     = {(byte)0xAB,0x00,0x04,(byte)0xFF,(byte)0x31,0x00,0x00,(byte)0xCA};
+              private static final byte[] CMD_HRV_START    = {(byte)0xAB,0x00,0x04,(byte)0xFF,(byte)0x32,0x00,0x00,(byte)0xCB};
+              private static final byte[] CMD_STRESS_START = {(byte)0xAB,0x00,0x04,(byte)0xFF,(byte)0x33,0x00,0x00,(byte)0xCC};
+              private static final byte[] CMD_SLEEP_GET    = {(byte)0xAB,0x00,0x04,(byte)0xFF,(byte)0x34,0x00,0x00,(byte)0xCD};
+              private BluetoothAdapter btAdapter;
+              private BluetoothLeScanner scanner;
+              private BluetoothGatt gatt;
+              private String targetMac;
+              private final Handler handler = new Handler(Looper.getMainLooper());
+
+              @Override public void onCreate() {
+                  super.onCreate();
+                  btAdapter = BluetoothAdapter.getDefaultAdapter();
+                  createChannel();
+                  startForeground(1, buildNotif("BioSpace BLE active"));
+              }
+
+              @Override public int onStartCommand(Intent intent, int flags, int startId) {
+                  if (intent == null) return START_STICKY;
+                  switch (intent.getAction() == null ? "" : intent.getAction()) {
+                      case "CONNECT":        targetMac = intent.getStringExtra("mac"); startScan(); break;
+                      case "DISCONNECT":     disconnect(); break;
+                      case "SCAN":           startScan(); break;
+                      case "REQUEST_BP":     writeVendor(CMD_BP_START); break;
+                      case "REQUEST_HRV":    writeVendor(CMD_HRV_START); break;
+                      case "REQUEST_STRESS": writeVendor(CMD_STRESS_START); break;
+                      case "REQUEST_SLEEP":  writeVendor(CMD_SLEEP_GET); break;
+                      case "NOTIF_WATCH":    sendWatchNotif(intent.getStringExtra("msg")); break;
+                  }
+                  return START_STICKY;
+              }
+
+              private void startScan() {
+                  if (btAdapter == null || !btAdapter.isEnabled()) {
+                      broadcast("{\"type\":\"error\",\"msg\":\"Bluetooth disabled\"}"); return;
+                  }
+                  scanner = btAdapter.getBluetoothLeScanner();
+                  broadcast("{\"type\":\"status\",\"status\":\"scanning\"}");
+                  ScanSettings ss = new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build();
+                  scanner.startScan(null, ss, scanCb);
+                  handler.postDelayed(this::stopScan, 20000);
+              }
+
+              private void stopScan() { if (scanner != null) scanner.stopScan(scanCb); }
+
+              private final ScanCallback scanCb = new ScanCallback() {
+                  @Override public void onScanResult(int t, ScanResult r) {
+                      Bluetoot
