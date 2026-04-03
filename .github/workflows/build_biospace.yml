@@ -1,5 +1,4 @@
 name: Build BioSpace Monitor APK
-
 on:
   push:
     branches: [ main ]
