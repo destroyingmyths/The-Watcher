@@ -1,4 +1,4 @@
-name: Build Biospace Monitor APK
+name: Build Biospace Monitor
 
 on:
   push:
