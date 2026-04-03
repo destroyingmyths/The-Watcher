@@ -1,5 +1,5 @@
-name: Build Biospace Monitor
-APK
+name: Build Biospace Monitor APK
+
 on:
   push:
     branches: [ main ]
