@@ -1,4 +1,4 @@
-name: "Build Biospace Monitor Apk"
+name: Build Biospace Monitor Apk
 
 on:
   push:
